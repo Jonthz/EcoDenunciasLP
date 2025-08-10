@@ -10,12 +10,32 @@ require_once '../controllers/DenunciasController.php'; // ACTUALIZACIÓN Giovann
 $request_uri = $_SERVER['REQUEST_URI'];
 $request_method = $_SERVER['REQUEST_METHOD'];
 
+// Debug en desarrollo
+if (ENVIRONMENT === 'development') {
+    error_log("REQUEST_URI: " . $request_uri);
+    error_log("REQUEST_METHOD: " . $request_method);
+}
+
 // Limpiar la URI removiendo el prefijo de la API
 $api_prefix = '/EcoDenunciasLP/api'; // Ajustar según tu estructura
 $path = str_replace($api_prefix, '', parse_url($request_uri, PHP_URL_PATH));
 
+// Si no encuentra el prefijo, intentar sin él (acceso directo)
+if ($path === parse_url($request_uri, PHP_URL_PATH)) {
+    $path = ltrim(parse_url($request_uri, PHP_URL_PATH), '/');
+    // Remover 'EcoDenunciasLP/api/' si está al inicio
+    if (strpos($path, 'EcoDenunciasLP/api/') === 0) {
+        $path = substr($path, strlen('EcoDenunciasLP/api/'));
+    }
+}
+
 // Remover slash inicial si existe
 $path = ltrim($path, '/');
+
+// Debug en desarrollo
+if (ENVIRONMENT === 'development') {
+    error_log("PARSED PATH: " . $path);
+}
 
 // Instanciar controladores
 $resumenController = new ResumenSemanalController();
@@ -24,18 +44,36 @@ $denunciasController = new DenunciasController(); // ACTUALIZACIÓN Giovanni Sam
 
 // Función para manejar errores 404
 function notFound() {
-    sendJsonResponse(array(
+    global $path, $request_method, $request_uri;
+    
+    $debug_info = array();
+    if (ENVIRONMENT === 'development') {
+        $debug_info = array(
+            "debug" => array(
+                "request_uri" => $request_uri,
+                "parsed_path" => $path,
+                "request_method" => $request_method,
+                "server_name" => $_SERVER['SERVER_NAME'] ?? 'unknown',
+                "server_port" => $_SERVER['SERVER_PORT'] ?? 'unknown'
+            )
+        );
+    }
+    
+    sendJsonResponse(array_merge(array(
         "success" => false,
         "message" => "Endpoint no encontrado",
         "available_endpoints" => array(
+            "GET /" => "Página principal de la API",
+            "GET /health" => "Health check del sistema",
+            "GET /docs" => "Documentación de la API",
+            "GET /setup" => "Setup inicial (solo desarrollo)",
             "GET /denuncias/resumen-semanal" => "Obtener resumen semanal de denuncias",
             "POST /denuncias" => "Crear nueva denuncia ambiental", // ACTUALIZACIÓN Giovanni Sambonino - Nuevo endpoint
             "GET /denuncias/{id}" => "Obtener denuncia específica", // ACTUALIZACIÓN Giovanni Sambonino - Nuevo endpoint
             "POST /comentarios" => "Crear nuevo comentario",
-            "GET /comentarios/{denuncia_id}" => "Obtener comentarios de una denuncia",
-            "GET /docs" => "Documentación de la API"
+            "GET /comentarios/{denuncia_id}" => "Obtener comentarios de una denuncia"
         )
-    ), 404);
+    ), $debug_info), 404);
 }
 
 // Router principal
@@ -284,22 +322,39 @@ function healthCheck() {
     try {
         // Probar conexión a base de datos
         $database = new Database();
-        $conn = $database->getConnection();
-        
-        $db_status = $conn ? "connected" : "disconnected";
-        
-        // Probar consulta básica
-        if ($conn) {
-            $stmt = $conn->query("SELECT COUNT(*) as count FROM denuncias");
-            $denuncias_count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-            
-            $stmt = $conn->query("SELECT COUNT(*) as count FROM comentarios");
-            $comentarios_count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+        try {
+            $conn = $database->getConnection();
+        } catch(Exception $dbEx) {
+            sendJsonResponse(array(
+                "success" => false,
+                "status" => "unhealthy",
+                "error" => "No se pudo conectar a la base de datos",
+                "db_error" => ENVIRONMENT === 'development' ? $dbEx->getMessage() : 'internal_error',
+                "timestamp" => date('Y-m-d H:i:s')
+            ), 500);
         }
-        
+
+        $db_status = $conn ? "connected" : "disconnected";
+
+        // Probar consulta básica solo si conectado
+        if ($conn) {
+            try {
+                $stmt = $conn->query("SELECT COUNT(*) as count FROM denuncias");
+                $denuncias_count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+            } catch(Exception $e) {
+                $denuncias_count = 0;
+            }
+            try {
+                $stmt = $conn->query("SELECT COUNT(*) as count FROM comentarios");
+                $comentarios_count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+            } catch(Exception $e) {
+                $comentarios_count = 0;
+            }
+        }
+
         sendJsonResponse(array(
             "success" => true,
-            "status" => "healthy",
+            "status" => $db_status === 'connected' ? "healthy" : "degraded",
             "timestamp" => date('Y-m-d H:i:s'),
             "database" => array(
                 "status" => $db_status,

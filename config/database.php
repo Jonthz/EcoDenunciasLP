@@ -7,10 +7,11 @@ class Database {
     private $is_local;
     
     // Configuración para desarrollo (XAMPP)
-    private $host_local = "localhost";
+    private $host_local = "127.0.0.1"; // Usamos explícito para evitar resoluciones distintas
+    private $port_local = 3307; // Puerto personalizado de MySQL en XAMPP
     private $db_name_local = "ecodenuncia_db";
     private $username_local = "root";
-    private $password_local = "";
+    private $password_local = ""; // Cambiar si tu XAMPP tiene contraseña
     
     // Configuración para producción (000webhost)
     private $host_prod = "localhost";
@@ -19,6 +20,7 @@ class Database {
     private $password_prod = "TuPassword123!"; // Cambiar por tu password real
     
     public $conn;
+    private $last_error = null;
     
     public function __construct() {
         // Detectar si estamos en desarrollo o producción
@@ -34,15 +36,43 @@ class Database {
      */
     public function getConnection() {
         $this->conn = null;
+    $this->last_error = null;
         
         try {
             if ($this->is_local) {
-                // Configuración para desarrollo (XAMPP)
-                $this->conn = new PDO(
-                    "mysql:host=" . $this->host_local . ";dbname=" . $this->db_name_local . ";charset=utf8mb4",
-                    $this->username_local,
-                    $this->password_local
-                );
+                // Intentos (orden de prioridad) usando puerto real primero
+                $intentos = [
+                    [ 'host' => $this->host_local, 'port' => $this->port_local, 'user' => $this->username_local, 'pass' => $this->password_local ],
+                    [ 'host' => 'localhost',        'port' => $this->port_local, 'user' => $this->username_local, 'pass' => $this->password_local ],
+                    [ 'host' => $this->host_local, 'port' => $this->port_local, 'user' => $this->username_local, 'pass' => 'password' ],
+                    // Fallbacks a puerto estándar por si el usuario lo cambia luego
+                    [ 'host' => $this->host_local, 'port' => 3306, 'user' => $this->username_local, 'pass' => $this->password_local ],
+                    [ 'host' => 'localhost',       'port' => 3306, 'user' => $this->username_local, 'pass' => $this->password_local ],
+                ];
+
+                $ultimo_error = '';
+                foreach ($intentos as $cfg) {
+                    $dsn = "mysql:host={$cfg['host']};port={$cfg['port']};dbname={$this->db_name_local};charset=utf8mb4";
+                    try {
+                        $this->conn = new PDO(
+                            $dsn,
+                            $cfg['user'],
+                            $cfg['pass'],
+                            [
+                                PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
+                                PDO::ATTR_TIMEOUT => 5
+                            ]
+                        );
+                        break; // Exito
+                    } catch(PDOException $e) {
+                        $ultimo_error = $e->getMessage();
+                        continue;
+                    }
+                }
+                if (!$this->conn) {
+                    throw new PDOException("No se pudo conectar (probados puertos 3307/3306). Último error: " . $ultimo_error);
+                }
+                
             } else {
                 // Configuración para producción (000webhost)
                 $this->conn = new PDO(
@@ -61,7 +91,7 @@ class Database {
             if (function_exists('logError')) {
                 logError('Database connection established', array(
                     'environment' => $this->is_local ? 'development' : 'production',
-                    'host' => $this->is_local ? $this->host_local : $this->host_prod,
+                    'host' => $this->is_local ? ($this->host_local . ':' . $this->port_local) : $this->host_prod,
                     'database' => $this->is_local ? $this->db_name_local : $this->db_name_prod
                 ));
             }
@@ -75,15 +105,19 @@ class Database {
                 ));
             }
             
-            // En desarrollo, mostrar el error. En producción, ocultar detalles
-            if ($this->is_local) {
-                die("Error de conexión: " . $exception->getMessage());
-            } else {
-                die("Error de conexión a la base de datos. Contacte al administrador.");
-            }
+            // Guardar error y lanzar excepción para que el caller lo maneje
+            $this->last_error = $exception->getMessage();
+            throw $exception;
         }
         
         return $this->conn;
+    }
+
+    /**
+     * Obtener último error de conexión
+     */
+    public function getLastError() {
+        return $this->last_error;
     }
     
     /**
@@ -126,8 +160,82 @@ class Database {
     }
     
     /**
-     * Crear tablas si no existen (solo para desarrollo)
+     * Diagnóstico de conexión (solo para desarrollo)
      */
+    public function diagnosticarConexion() {
+        if (!$this->is_local) {
+            return array('error' => 'Diagnóstico solo disponible en desarrollo');
+        }
+        
+        $resultados = array();
+        
+        // Verificar si MySQL está corriendo
+        $mysql_corriendo = false;
+        if (function_exists('mysqli_connect')) {
+            $test_conn = @mysqli_connect($this->host_local, $this->username_local, $this->password_local, null, $this->port_local);
+            if ($test_conn) {
+                $mysql_corriendo = true;
+                mysqli_close($test_conn);
+            }
+        }
+        
+        $resultados['mysql_running'] = $mysql_corriendo;
+        
+        // Probar configuraciones (incluye puerto 3307 prioritario)
+        $configuraciones_test = [
+            '127.0.0.1_3307_sin_password' => [$this->host_local, $this->port_local, $this->username_local, $this->password_local],
+            'localhost_3307_sin_password' => ['localhost', $this->port_local, $this->username_local, $this->password_local],
+            '127.0.0.1_3307_con_password' => [$this->host_local, $this->port_local, $this->username_local, 'password'],
+            '127.0.0.1_3306_sin_password' => [$this->host_local, 3306, $this->username_local, $this->password_local],
+        ];
+        
+        foreach ($configuraciones_test as $nombre => $cfg) {
+            try {
+                $dsn = "mysql:host={$cfg[0]};port={$cfg[1]};charset=utf8mb4";
+                $test_pdo = new PDO($dsn, $cfg[2], $cfg[3], [PDO::ATTR_TIMEOUT => 3]);
+                $resultados[$nombre] = 'EXITOSO';
+                $test_pdo = null;
+            } catch(PDOException $e) {
+                $resultados[$nombre] = 'ERROR: ' . $e->getMessage();
+            }
+        }
+        
+        // Verificar si la base de datos existe
+        try {
+            $test_pdo = new PDO("mysql:host={$this->host_local};port={$this->port_local};charset=utf8mb4", $this->username_local, $this->password_local);
+            $stmt = $test_pdo->query("SHOW DATABASES LIKE 'ecodenuncia_db'");
+            $resultados['database_exists'] = $stmt->rowCount() > 0 ? 'SÍ' : 'NO';
+            $test_pdo = null;
+        } catch(PDOException $e) {
+            $resultados['database_exists'] = 'ERROR: ' . $e->getMessage();
+        }
+        
+        return $resultados;
+    }
+    
+    /**
+     * Crear base de datos si no existe (solo desarrollo)
+     */
+    public function crearBaseDatos() {
+        if (!$this->is_local) {
+            throw new Exception("Esta función solo está disponible en desarrollo");
+        }
+        
+        try {
+            // Conectar sin especificar base de datos
+            $conn = new PDO("mysql:host={$this->host_local};port={$this->port_local};charset=utf8mb4", $this->username_local, $this->password_local);
+            
+            // Crear la base de datos
+            $sql = "CREATE DATABASE IF NOT EXISTS " . $this->db_name_local . " 
+                    CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci";
+            $conn->exec($sql);
+            
+            return array('success' => true, 'message' => 'Base de datos creada o ya existe');
+            
+        } catch(PDOException $e) {
+            return array('success' => false, 'error' => $e->getMessage());
+        }
+    }
     public function crearTablasDesarrollo() {
         if (!$this->is_local) {
             throw new Exception("Esta función solo está disponible en desarrollo");
@@ -138,15 +246,23 @@ class Database {
             $sql_denuncias = "
                 CREATE TABLE IF NOT EXISTS denuncias (
                     id INT AUTO_INCREMENT PRIMARY KEY,
-                    tipo_problema VARCHAR(100) NOT NULL,
+                    tipo_problema ENUM(
+                        'contaminacion_agua',
+                        'contaminacion_aire', 
+                        'deforestacion',
+                        'manejo_residuos',
+                        'ruido_excesivo',
+                        'contaminacion_suelo',
+                        'otros'
+                    ) NOT NULL,
                     descripcion TEXT NOT NULL,
-                    ubicacion_direccion VARCHAR(255) NOT NULL,
                     ubicacion_lat DECIMAL(10, 8) NULL,
                     ubicacion_lng DECIMAL(11, 8) NULL,
-                    imagen_url VARCHAR(255) NULL,
+                    ubicacion_direccion VARCHAR(255) NOT NULL,
+                    imagen_url VARCHAR(500) NULL,
                     estado ENUM('pendiente', 'en_proceso', 'resuelta') DEFAULT 'pendiente',
                     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    fecha_actualizacion TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
                     INDEX idx_fecha_creacion (fecha_creacion),
                     INDEX idx_estado (estado),
                     INDEX idx_tipo_problema (tipo_problema)
@@ -207,26 +323,36 @@ class Database {
             $denuncias_ejemplo = array(
                 array(
                     'tipo_problema' => 'contaminacion_agua',
-                    'descripcion' => 'Vertido de residuos industriales en el río. Se observa espuma y mal olor.',
-                    'ubicacion' => 'Río Verde, Guayaquil, Ecuador',
-                    'estado' => 'pendiente'
+                    'descripcion' => 'Vertido de residuos industriales en el Río Verde afectando la calidad del agua',
+                    'ubicacion' => 'Río Verde, Sector Industrial, Guayaquil',
+                    'estado' => 'pendiente',
+                    'dias_atras' => 2
                 ),
                 array(
-                    'tipo_problema' => 'basura_acumulada',
-                    'descripcion' => 'Gran acumulación de basura en espacio público afectando la salud de los habitantes.',
-                    'ubicacion' => 'Mercado Central, Quito, Ecuador',
-                    'estado' => 'en_proceso'
+                    'tipo_problema' => 'deforestacion',
+                    'descripcion' => 'Tala ilegal de árboles en área protegida sin permisos correspondientes',
+                    'ubicacion' => 'Área Verde Protegida, Vía a la Costa',
+                    'estado' => 'pendiente',
+                    'dias_atras' => 1
+                ),
+                array(
+                    'tipo_problema' => 'manejo_residuos',
+                    'descripcion' => 'Acumulación de basura en parque público sin recolección por más de una semana',
+                    'ubicacion' => 'Parque Central, Samborondón',
+                    'estado' => 'en_proceso',
+                    'dias_atras' => 5
                 ),
                 array(
                     'tipo_problema' => 'contaminacion_aire',
-                    'descripcion' => 'Fábrica emitiendo humos tóxicos sin control, afectando barrios cercanos.',
-                    'ubicacion' => 'Zona Industrial, Cuenca, Ecuador',
-                    'estado' => 'pendiente'
+                    'descripcion' => 'Emisión excesiva de gases contaminantes de fábrica textil',
+                    'ubicacion' => 'Zona Industrial Norte, Guayaquil',
+                    'estado' => 'en_proceso',
+                    'dias_atras' => 3
                 )
             );
             
             $sql = "INSERT INTO denuncias (tipo_problema, descripcion, ubicacion_direccion, estado, fecha_creacion) 
-                    VALUES (?, ?, ?, ?, DATE_SUB(NOW(), INTERVAL FLOOR(RAND() * 7) DAY))";
+                    VALUES (?, ?, ?, ?, DATE_SUB(NOW(), INTERVAL ? DAY))";
             
             $stmt = $this->conn->prepare($sql);
             
@@ -235,16 +361,17 @@ class Database {
                     $denuncia['tipo_problema'],
                     $denuncia['descripcion'],
                     $denuncia['ubicacion'],
-                    $denuncia['estado']
+                    $denuncia['estado'],
+                    $denuncia['dias_atras']
                 ));
             }
             
             // Insertar algunos comentarios de ejemplo
             $comentarios_ejemplo = array(
-                array(1, 'María González', 'Esta situación requiere atención inmediata de las autoridades ambientales.'),
-                array(1, 'Carlos Pérez', 'He notado el mismo problema en la zona. Es urgente tomar medidas.'),
-                array(2, 'Ana López', 'Excelente reporte. La basura afecta a toda la comunidad.'),
-                array(3, 'Jonathan Zambrano', 'Situación preocupante que debe ser investigada a fondo.')
+                array(1, 'Sofia Ramirez', 'Esto requiere atención inmediata de las autoridades'),
+                array(1, 'Carlos Gomez', 'Estoy de acuerdo, la situación es muy grave'),
+                array(2, 'Ana Lopez', 'He visto camiones llevándose los árboles ilegalmente'),
+                array(3, 'Miguel Torres', 'La gestión de residuos en esta zona es deficiente')
             );
             
             $sql_comentarios = "INSERT INTO comentarios (denuncia_id, nombre_usuario, comentario) VALUES (?, ?, ?)";

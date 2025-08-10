@@ -9,10 +9,27 @@ $is_local = (
     strpos($_SERVER['SERVER_NAME'], '.local') !== false
 );
 
+// Detectar si necesitamos HTTPS (para 127.0.0.1 en algunas configuraciones)
+$is_https = (
+    isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ||
+    isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] === '443' ||
+    $_SERVER['SERVER_NAME'] === '127.0.0.1'
+);
+
 // Configuración según entorno
 if ($is_local) {
     // ============= CONFIGURACIÓN DESARROLLO (XAMPP) =============
-    define('BASE_URL', 'http://localhost/EcoDenunciasLP/');
+    $port = $_SERVER['SERVER_PORT'] ?? '80';
+    $protocol = $is_https ? 'https' : 'http';
+    
+    // Solo agregar puerto si no es el estándar para el protocolo
+    $port_suffix = '';
+    if (($protocol === 'http' && $port != '80') || 
+        ($protocol === 'https' && $port != '443')) {
+        $port_suffix = ':' . $port;
+    }
+    
+    define('BASE_URL', $protocol . '://' . $_SERVER['SERVER_NAME'] . $port_suffix . '/EcoDenunciasLP/');
     define('API_URL', BASE_URL . 'api/');
     define('UPLOAD_DIR', BASE_URL . 'uploads/');
     define('ENVIRONMENT', 'development');
