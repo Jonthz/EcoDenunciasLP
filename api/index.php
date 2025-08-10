@@ -60,10 +60,11 @@ function notFound() {
             "GET /comentarios/{denuncia_id}" => "Obtener comentarios de una denuncia",
             "PUT /denuncias/{id}/estado" => "Actualizar estado de denuncia",
             "GET /denuncias/{id}" => "Obtener detalles de una denuncia",
+            "GET /denuncias/{id}/historial" => "Obtener historial de estados de una denuncia",
             "GET /reportes" => "Generar reportes de denuncias",
             "GET /reportes/categorias" => "Reporte por categorías",
             "GET /reportes/ubicaciones" => "Reporte por ubicaciones",
-            "GET /reportes/temporal" => "Reporte temporal (tendencias)",
+            "GET /reportes/exportar" => "Exportar reporte general (CSV/JSON)",
             "GET /docs" => "Documentación de la API"
         )
     ), 404);
