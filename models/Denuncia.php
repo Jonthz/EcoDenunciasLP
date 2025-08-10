@@ -10,17 +10,13 @@ class Denuncia {
     public $id;
     public $tipo_problema;
     public $descripcion;
-    public $ubicacion;
-    public $latitud;
-    public $longitud;
-    public $imagen_evidencia;
-    public $nombre_reportante;
-    public $email_reportante;
-    public $telefono_reportante;
+    public $ubicacion_lat;
+    public $ubicacion_lng;
+    public $ubicacion_direccion;
+    public $imagen_url;
     public $estado;
-    public $prioridad;
-    public $fecha_reporte;
     public $fecha_creacion;
+    public $fecha_actualizacion;
     
     public function __construct() {
         $database = new Database();
@@ -161,37 +157,29 @@ class Denuncia {
     public function crear($datos) {
         try {
             $query = "INSERT INTO " . $this->table_name . " 
-                     (tipo_problema, descripcion, ubicacion, latitud, longitud, 
-                      imagen_evidencia, nombre_reportante, email_reportante, 
-                      telefono_reportante, estado, prioridad, fecha_reporte) 
+                     (tipo_problema, descripcion, ubicacion_direccion, ubicacion_lat, ubicacion_lng, 
+                      imagen_url, estado, fecha_creacion) 
                      VALUES 
-                     (:tipo_problema, :descripcion, :ubicacion, :latitud, :longitud, 
-                      :imagen_evidencia, :nombre_reportante, :email_reportante, 
-                      :telefono_reportante, :estado, :prioridad, :fecha_reporte)";
+                     (:tipo_problema, :descripcion, :ubicacion_direccion, :ubicacion_lat, :ubicacion_lng, 
+                      :imagen_url, :estado, :fecha_creacion)";
             
             $stmt = $this->conn->prepare($query);
             
             // Bind parameters con validación
             $stmt->bindParam(':tipo_problema', $datos['tipo_problema'], PDO::PARAM_STR);
             $stmt->bindParam(':descripcion', $datos['descripcion'], PDO::PARAM_STR);
-            $stmt->bindParam(':ubicacion', $datos['ubicacion'], PDO::PARAM_STR);
+            $stmt->bindParam(':ubicacion_direccion', $datos['ubicacion_direccion'], PDO::PARAM_STR);
             
             // Manejar valores NULL correctamente
-            $latitud = $datos['latitud'];
-            $longitud = $datos['longitud'];
-            $imagen = $datos['imagen_evidencia'];
-            $email = $datos['email_reportante'];
-            $telefono = $datos['telefono_reportante'];
+            $ubicacion_lat = $datos['ubicacion_lat'];
+            $ubicacion_lng = $datos['ubicacion_lng'];
+            $imagen_url = $datos['imagen_url'];
             
-            $stmt->bindParam(':latitud', $latitud, PDO::PARAM_STR);
-            $stmt->bindParam(':longitud', $longitud, PDO::PARAM_STR);
-            $stmt->bindParam(':imagen_evidencia', $imagen, PDO::PARAM_STR);
-            $stmt->bindParam(':nombre_reportante', $datos['nombre_reportante'], PDO::PARAM_STR);
-            $stmt->bindParam(':email_reportante', $email, PDO::PARAM_STR);
-            $stmt->bindParam(':telefono_reportante', $telefono, PDO::PARAM_STR);
+            $stmt->bindParam(':ubicacion_lat', $ubicacion_lat, PDO::PARAM_STR);
+            $stmt->bindParam(':ubicacion_lng', $ubicacion_lng, PDO::PARAM_STR);
+            $stmt->bindParam(':imagen_url', $imagen_url, PDO::PARAM_STR);
             $stmt->bindParam(':estado', $datos['estado'], PDO::PARAM_STR);
-            $stmt->bindParam(':prioridad', $datos['prioridad'], PDO::PARAM_STR);
-            $stmt->bindParam(':fecha_reporte', $datos['fecha_reporte'], PDO::PARAM_STR);
+            $stmt->bindParam(':fecha_creacion', $datos['fecha_creacion'], PDO::PARAM_STR);
             
             if ($stmt->execute()) {
                 return [

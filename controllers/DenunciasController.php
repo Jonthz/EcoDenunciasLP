@@ -51,18 +51,14 @@ class DenunciasController {
             
             // Preparar datos según estructura de BD
             $datos_denuncia = [
-                'tipo_problema' => $input_data['categoria'],
+                'tipo_problema' => $input_data['categoria'], // Mapear categoria -> tipo_problema
                 'descripcion' => trim($input_data['descripcion']),
-                'ubicacion' => trim($input_data['ubicacion']),
-                'latitud' => !empty($input_data['latitud']) ? (float)$input_data['latitud'] : null,
-                'longitud' => !empty($input_data['longitud']) ? (float)$input_data['longitud'] : null,
-                'imagen_evidencia' => $imagen_path,
-                'nombre_reportante' => !empty($input_data['nombre_reportante']) ? trim($input_data['nombre_reportante']) : 'Anónimo',
-                'email_reportante' => !empty($input_data['email_reportante']) ? trim($input_data['email_reportante']) : null,
-                'telefono_reportante' => !empty($input_data['telefono_reportante']) ? trim($input_data['telefono_reportante']) : null,
+                'ubicacion_direccion' => trim($input_data['ubicacion']), // Mapear ubicacion -> ubicacion_direccion
+                'ubicacion_lat' => !empty($input_data['latitud']) ? (float)$input_data['latitud'] : null, // Mapear latitud -> ubicacion_lat
+                'ubicacion_lng' => !empty($input_data['longitud']) ? (float)$input_data['longitud'] : null, // Mapear longitud -> ubicacion_lng
+                'imagen_url' => $imagen_path, // Mapear imagen_evidencia -> imagen_url
                 'estado' => 'pendiente',
-                'prioridad' => $this->determinarPrioridad($input_data),
-                'fecha_reporte' => date('Y-m-d H:i:s')
+                'fecha_creacion' => date('Y-m-d H:i:s')
             ];
 
             // Insertar usando método del modelo
@@ -77,11 +73,11 @@ class DenunciasController {
                         "denuncia_id" => $resultado['id'],
                         "numero_folio" => $this->generarFolio($resultado['id']),
                         "estado" => "pendiente",
-                        "prioridad" => $datos_denuncia['prioridad'],
-                        "fecha_creacion" => $datos_denuncia['fecha_reporte'],
+                        "prioridad" => $this->determinarPrioridad($input_data),
+                        "fecha_creacion" => $datos_denuncia['fecha_creacion'],
                         "imagen_subida" => $imagen_path ? true : false,
-                        "coordenadas_registradas" => ($datos_denuncia['latitud'] && $datos_denuncia['longitud']) ? true : false,
-                        "contacto_registrado" => $datos_denuncia['email_reportante'] ? true : false
+                        "coordenadas_registradas" => ($datos_denuncia['ubicacion_lat'] && $datos_denuncia['ubicacion_lng']) ? true : false,
+                        "contacto_registrado" => !empty($input_data['email_reportante']) ? true : false
                     ]
                 ], 201);
             } else {
@@ -134,9 +130,8 @@ class DenunciasController {
         
         // Categoría requerida y válida
         $categorias_validas = [
-            'contaminacion_agua', 'contaminacion_aire', 'residuos_solidos', 
-            'contaminacion_sonora', 'deforestacion', 'vertido_industrial', 
-            'contaminacion_suelo', 'otro'
+            'contaminacion_agua', 'contaminacion_aire', 'deforestacion', 
+            'manejo_residuos', 'ruido_excesivo', 'contaminacion_suelo', 'otros'
         ];
         
         if (empty($datos['categoria'])) {
@@ -306,12 +301,12 @@ class DenunciasController {
         // Prioridad por categoría
         $prioridades_categoria = [
             'contaminacion_agua' => 'alta',
-            'vertido_industrial' => 'alta',
+            'contaminacion_suelo' => 'alta',
             'contaminacion_aire' => 'media',
             'deforestacion' => 'media',
-            'residuos_solidos' => 'media',
-            'contaminacion_sonora' => 'baja',
-            'otro' => 'media'
+            'manejo_residuos' => 'media',
+            'ruido_excesivo' => 'baja',
+            'otros' => 'media'
         ];
         
         return $prioridades_categoria[$categoria] ?? 'media';
