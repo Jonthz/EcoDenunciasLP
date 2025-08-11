@@ -8,12 +8,17 @@ class Denuncia {
     private $table_name = "denuncias";
     private $table_historial = "historial_estados";
     
+    // ACTUALIZACIÓN Giovanni Sambonino - Propiedades para campos completos de denuncias con imagen
     public $id;
     public $tipo_problema;
     public $descripcion;
-    public $ubicacion_direccion;
     public $ubicacion_lat;
     public $ubicacion_lng;
+    public $ubicacion_direccion;
+
+    public $ubicacion_lat;
+    public $ubicacion_lng;
+
     public $imagen_url;
     public $estado;
     public $fecha_creacion;
@@ -335,6 +340,222 @@ class Denuncia {
     }
     
     /**
+
+     * ACTUALIZACIÓN Giovanni Sambonino - Crear nueva denuncia con campos completos incluyendo imagen y prioridad
+     */
+    public function crear($datos) {
+        try {
+            $query = "INSERT INTO " . $this->table_name . " 
+                     (tipo_problema, descripcion, ubicacion_direccion, ubicacion_lat, ubicacion_lng, 
+                      imagen_url, estado, fecha_creacion) 
+                     VALUES 
+                     (:tipo_problema, :descripcion, :ubicacion_direccion, :ubicacion_lat, :ubicacion_lng, 
+                      :imagen_url, :estado, :fecha_creacion)";
+            
+            $stmt = $this->conn->prepare($query);
+            
+            // Bind parameters con validación
+            $stmt->bindParam(':tipo_problema', $datos['tipo_problema'], PDO::PARAM_STR);
+            $stmt->bindParam(':descripcion', $datos['descripcion'], PDO::PARAM_STR);
+            $stmt->bindParam(':ubicacion_direccion', $datos['ubicacion_direccion'], PDO::PARAM_STR);
+            
+            // Manejar valores NULL correctamente
+            $ubicacion_lat = $datos['ubicacion_lat'];
+            $ubicacion_lng = $datos['ubicacion_lng'];
+            $imagen_url = $datos['imagen_url'];
+            
+            $stmt->bindParam(':ubicacion_lat', $ubicacion_lat, PDO::PARAM_STR);
+            $stmt->bindParam(':ubicacion_lng', $ubicacion_lng, PDO::PARAM_STR);
+            $stmt->bindParam(':imagen_url', $imagen_url, PDO::PARAM_STR);
+            $stmt->bindParam(':estado', $datos['estado'], PDO::PARAM_STR);
+            $stmt->bindParam(':fecha_creacion', $datos['fecha_creacion'], PDO::PARAM_STR);
+            
+            if ($stmt->execute()) {
+                return [
+                    'success' => true,
+                    'id' => $this->conn->lastInsertId(),
+                    'message' => 'Denuncia creada exitosamente'
+                ];
+            } else {
+                return [
+                    'success' => false,
+                    'error' => 'Error al ejecutar consulta: ' . implode(', ', $stmt->errorInfo())
+                ];
+            }
+            
+        } catch (PDOException $e) {
+            return [
+                'success' => false,
+                'error' => 'Error de base de datos: ' . $e->getMessage()
+            ];
+        }
+    }
+    
+    /**
+     * ACTUALIZACIÓN Giovanni Sambonino - Obtener denuncia por ID con información completa y estadísticas
+     */
+    public function obtenerPorId($id) {
+        try {
+            $query = "SELECT d.*, 
+                             TIMESTAMPDIFF(DAY, d.fecha_reporte, NOW()) as dias_transcurridos,
+                             (SELECT COUNT(*) FROM comentarios c WHERE c.denuncia_id = d.id AND c.activo = 1) as total_comentarios
+                      FROM " . $this->table_name . " d 
+                      WHERE d.id = :id 
+                      LIMIT 1";
+                      
+            $stmt = $this->conn->prepare($query);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+            $stmt->execute();
+            
+            $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($resultado) {
+                // Agregar URL completa de imagen si existe
+                if ($resultado['imagen_evidencia']) {
+                    $resultado['imagen_url'] = API_URL . '../' . $resultado['imagen_evidencia'];
+                }
+                
+                return $resultado;
+            }
+            
+            return false;
+            
+        } catch (PDOException $e) {
+            error_log("Error en obtenerPorId: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // ACTUALIZACIÓN Giovanni Sambonino - Obtener denuncias con filtros para búsquedas avanzadas
+    public function obtenerConFiltros($filtros = []) {
+        try {
+            $query = "SELECT d.*, 
+                             TIMESTAMPDIFF(DAY, d.fecha_reporte, NOW()) as dias_transcurridos,
+                             (SELECT COUNT(*) FROM comentarios c WHERE c.denuncia_id = d.id AND c.activo = 1) as total_comentarios
+                      FROM " . $this->table_name . " d 
+                      WHERE 1=1";
+            
+            $params = [];
+            
+            // Filtro por zona/ubicación
+            if (!empty($filtros['zona'])) {
+                $query .= " AND d.ubicacion LIKE :zona";
+                $params[':zona'] = '%' . $filtros['zona'] . '%';
+            }
+            
+            // Filtro por categoría
+            if (!empty($filtros['categoria'])) {
+                $query .= " AND d.tipo_problema = :categoria";
+                $params[':categoria'] = $filtros['categoria'];
+            }
+            
+            // Filtro por estado
+            if (!empty($filtros['estado'])) {
+                $query .= " AND d.estado = :estado";
+                $params[':estado'] = $filtros['estado'];
+            }
+            
+            // Filtro por fecha
+            if (!empty($filtros['dias'])) {
+                $query .= " AND d.fecha_reporte >= DATE_SUB(NOW(), INTERVAL :dias DAY)";
+                $params[':dias'] = (int)$filtros['dias'];
+            } else {
+                $query .= " AND d.fecha_reporte >= DATE_SUB(NOW(), INTERVAL 7 DAY)";
+            }
+            
+            // Ordenar por fecha más reciente
+            $query .= " ORDER BY d.fecha_reporte DESC";
+            
+            // Limitar resultados
+            $limite = !empty($filtros['limite']) ? min((int)$filtros['limite'], 50) : 10;
+            $query .= " LIMIT :limite";
+            
+            $stmt = $this->conn->prepare($query);
+            
+            // Bind parámetros
+            foreach ($params as $key => $value) {
+                $stmt->bindValue($key, $value);
+            }
+            $stmt->bindValue(':limite', $limite, PDO::PARAM_INT);
+            
+            $stmt->execute();
+            $resultados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Agregar URLs de imágenes
+            foreach ($resultados as &$denuncia) {
+                if ($denuncia['imagen_evidencia']) {
+                    $denuncia['imagen_url'] = API_URL . '../' . $denuncia['imagen_evidencia'];
+                }
+            }
+            
+            return $resultados;
+            
+        } catch (PDOException $e) {
+            error_log("Error en obtenerConFiltros: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // ACTUALIZACIÓN Giovanni Sambonino - Obtener estadísticas completas de denuncias por estado y prioridad
+    public function obtenerEstadisticas($filtros = []) {
+        try {
+            $query = "SELECT 
+                        COUNT(*) as total_denuncias,
+                        SUM(CASE WHEN estado = 'pendiente' THEN 1 ELSE 0 END) as pendientes,
+                        SUM(CASE WHEN estado = 'en_proceso' THEN 1 ELSE 0 END) as en_proceso,
+                        SUM(CASE WHEN estado = 'resuelto' THEN 1 ELSE 0 END) as resueltas,
+                        SUM(CASE WHEN estado = 'rechazado' THEN 1 ELSE 0 END) as rechazadas,
+                        SUM(CASE WHEN prioridad = 'critica' THEN 1 ELSE 0 END) as criticas,
+                        SUM(CASE WHEN prioridad = 'alta' THEN 1 ELSE 0 END) as altas,
+                        AVG(TIMESTAMPDIFF(DAY, fecha_reporte, NOW())) as promedio_dias_antiguedad
+                      FROM " . $this->table_name . " d 
+                      WHERE 1=1";
+            
+            $params = [];
+            
+            // Aplicar filtros
+            if (!empty($filtros['zona'])) {
+                $query .= " AND d.ubicacion LIKE :zona";
+                $params[':zona'] = '%' . $filtros['zona'] . '%';
+            }
+            
+            if (!empty($filtros['categoria'])) {
+                $query .= " AND d.tipo_problema = :categoria";
+                $params[':categoria'] = $filtros['categoria'];
+            }
+            
+            if (!empty($filtros['dias'])) {
+                $query .= " AND d.fecha_reporte >= DATE_SUB(NOW(), INTERVAL :dias DAY)";
+                $params[':dias'] = (int)$filtros['dias'];
+            } else {
+                $query .= " AND d.fecha_reporte >= DATE_SUB(NOW(), INTERVAL 7 DAY)";
+            }
+            
+            $stmt = $this->conn->prepare($query);
+            
+            foreach ($params as $key => $value) {
+                $stmt->bindValue($key, $value);
+            }
+            
+            $stmt->execute();
+            $estadisticas = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            return [
+                'total_denuncias' => (int)$estadisticas['total_denuncias'],
+                'pendientes' => (int)$estadisticas['pendientes'],
+                'en_proceso' => (int)$estadisticas['en_proceso'],
+                'resueltas' => (int)$estadisticas['resueltas'],
+                'rechazadas' => (int)$estadisticas['rechazadas'],
+                'criticas' => (int)$estadisticas['criticas'],
+                'altas' => (int)$estadisticas['altas'],
+                'promedio_dias_antiguedad' => round((float)$estadisticas['promedio_dias_antiguedad'], 1)
+            ];
+            
+        } catch (PDOException $e) {
+            error_log("Error en obtenerEstadisticas: " . $e->getMessage());
+            return false;
+        }
+
      * Validar transición de estado
      */
     private function validarTransicionEstado($estado_actual, $estado_nuevo) {
@@ -415,6 +636,7 @@ class Denuncia {
         $stmt->execute();
         
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+
     }
 }
 ?>

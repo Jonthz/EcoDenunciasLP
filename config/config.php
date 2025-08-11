@@ -271,6 +271,19 @@ if (ENVIRONMENT === 'production') {
     $_SESSION['rate_limit'][] = $current_time;
 }
 
+// ACTUALIZACIÓN Giovanni Sambonino - Configuración para subida de archivos de denuncias
+define('UPLOAD_MAX_SIZE', 5 * 1024 * 1024); // 5MB
+define('UPLOAD_ALLOWED_TYPES', ['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+define('UPLOAD_DIR', '../uploads/');
+
+// ACTUALIZACIÓN Giovanni Sambonino - Crear directorios de uploads automáticamente
+if (!file_exists(UPLOAD_DIR)) {
+    mkdir(UPLOAD_DIR, 0755, true);
+}
+if (!file_exists(UPLOAD_DIR . 'denuncias/')) {
+    mkdir(UPLOAD_DIR . 'denuncias/', 0755, true);
+}
+
 // ============= INFORMACIÓN DE DEBUG =============
 if (ENVIRONMENT === 'development') {
     // Solo en desarrollo: mostrar información útil

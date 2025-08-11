@@ -4,8 +4,12 @@ require_once '../config/config.php';
 require_once '../config/database.php';
 require_once '../controllers/ResumenSemanalController.php';
 require_once '../controllers/ComentariosController.php';
+
+require_once '../controllers/DenunciasController.php'; // ACTUALIZACIÓN Giovanni Sambonino - Controlador para registrar denuncias
+
 require_once '../controllers/EstadoDenunciaController.php';
 require_once '../controllers/ReportesController.php';
+
 
 // Obtener información de la request
 $request_uri = $_SERVER['REQUEST_URI'];
@@ -42,8 +46,12 @@ if (ENVIRONMENT === 'development') {
 // Instanciar controladores
 $resumenController = new ResumenSemanalController();
 $comentariosController = new ComentariosController();
+
+$denunciasController = new DenunciasController(); // ACTUALIZACIÓN Giovanni Sambonino - Nueva instancia para manejo de denuncias
+
 $estadoController = new EstadoDenunciaController();
 $reportesController = new ReportesController();
+
 
 // Función para manejar errores 404
 function notFound() {
@@ -56,6 +64,8 @@ function notFound() {
             "GET /docs" => "Documentación de la API",
             "GET /setup" => "Setup inicial (solo desarrollo)",
             "GET /denuncias/resumen-semanal" => "Obtener resumen semanal de denuncias",
+            "POST /denuncias" => "Crear nueva denuncia ambiental", // ACTUALIZACIÓN Giovanni Sambonino - Nuevo endpoint
+            "GET /denuncias/{id}" => "Obtener denuncia específica", // ACTUALIZACIÓN Giovanni Sambonino - Nuevo endpoint
             "POST /comentarios" => "Crear nuevo comentario",
             "GET /comentarios/{denuncia_id}" => "Obtener comentarios de una denuncia",
             "PUT /denuncias/{id}/estado" => "Actualizar estado de denuncia",
@@ -89,6 +99,21 @@ try {
             $denuncia_id = $matches[1];
             $comentariosController->obtenerComentariosPorDenuncia($denuncia_id);
             break;
+
+        
+        // ============= FUNCIONALIDAD 3: REGISTRAR NUEVA DENUNCIA ============= 
+        // ACTUALIZACIÓN Giovanni Sambonino - Endpoint para crear denuncias con imagen y geolocalización
+        case ($path === 'denuncias' && $request_method === 'POST'):
+            $denunciasController->crearDenuncia();
+            break;
+
+        // ACTUALIZACIÓN Giovanni Sambonino - Endpoint para obtener denuncia específica por ID
+        case (preg_match('/^denuncias\/(\d+)$/', $path, $matches) && $request_method === 'GET'):
+            $denuncia_id = $matches[1];
+            $denunciasController->obtenerDenuncia($denuncia_id);
+            break;
+
+
             
         // ============= FUNCIONALIDAD 3: ACTUALIZAR ESTADO (Darwin) =============
         // Actualizar estado de denuncia
@@ -135,6 +160,7 @@ try {
             $reportesController->exportarReporte();
             break;
             
+
         // ============= ENDPOINTS AUXILIARES =============
         
         // Documentación de la API
@@ -179,7 +205,12 @@ try {
 }
 
 /**
+
+ * Documentación completa de la API
+ * ACTUALIZACIÓN Giovanni Sambonino - Documentación completa con endpoints de denuncias y ejemplos de uso
+
  * Documentación completa de la API actualizada
+
  */
 function mostrarDocumentacion() {
     $documentation = array(
@@ -198,14 +229,43 @@ function mostrarDocumentacion() {
                 "developer" => "Jonathan Zambrano",
                 "descripcion" => "Ver resumen semanal de denuncias recientes en su zona",
                 "endpoint" => "GET /denuncias/resumen-semanal",
-                "parametros" => array(
-                    "zona" => "(opcional) Filtrar por zona/ubicación",
-                    "categoria" => "(opcional) Filtrar por tipo de problema",
-                    "limite" => "(opcional) Cantidad máxima de denuncias (1-50, default: 10)"
+                "parametros_opcionales" => array(
+                    "zona" => "Filtrar por ubicación específica",
+                    "categoria" => "Filtrar por tipo de problema",
+                    "limite" => "Número máximo de denuncias a retornar (default: 10, max: 50)"
+                )
+            ),
+            "registrar_denuncia" => array(
+                "descripcion" => "Crear nueva denuncia ambiental con evidencia fotográfica y geolocalización",
+                "endpoint" => "POST /denuncias",
+                "content_type" => "multipart/form-data o application/json",
+                "parametros_requeridos" => array(
+                    "descripcion" => "Descripción detallada del problema (min 10 caracteres, max 2000)",
+                    "categoria" => "Tipo de problema: contaminacion_agua, contaminacion_aire, residuos_solidos, contaminacion_sonora, deforestacion, vertido_industrial, contaminacion_suelo, otro",
+                    "ubicacion" => "Ubicación específica del problema (min 5 caracteres, max 255)"
+                ),
+                "parametros_opcionales" => array(
+                    "latitud" => "Coordenada latitud GPS (-90 a 90)",
+                    "longitud" => "Coordenada longitud GPS (-180 a 180)",
+                    "imagen" => "Archivo de imagen como evidencia (JPEG, PNG, GIF, WEBP, max 5MB)",
+                    "nombre_reportante" => "Nombre del reportante (default: 'Anónimo', max 100 caracteres)",
+                    "email_reportante" => "Email de contacto válido (max 100 caracteres)",
+                    "telefono_reportante" => "Teléfono de contacto (7-20 dígitos)"
+                ),
+                "ejemplo_request_json" => array(
+                    "descripcion" => "Vertido de químicos industriales en el río, se observa espuma blanca y olor fuerte que afecta a la comunidad",
+                    "categoria" => "contaminacion_agua",
+                    "ubicacion" => "Río Daule, sector Mapasingue Este, Guayaquil, Ecuador",
+                    "latitud" => -2.1894,
+                    "longitud" => -79.8847,
+                    "nombre_reportante" => "María González Pérez",
+                    "email_reportante" => "maria.gonzalez@email.com",
+                    "telefono_reportante" => "0987654321"
                 ),
                 "ejemplo_request" => API_URL . "denuncias/resumen-semanal?zona=Guayaquil&categoria=contaminacion_agua&limite=5",
                 "ejemplo_response" => array(
                     "success" => true,
+                    "message" => "Denuncia creada exitosamente",
                     "data" => array(
                         "resumen" => array(
                             "total_denuncias" => 3,
@@ -216,9 +276,15 @@ function mostrarDocumentacion() {
                         "denuncias" => array(
                             array(
                                 "id" => 1,
+                                "numero_folio" => "ECO-2025-000015",
+                                "prioridad" => "alta",
                                 "tipo_problema" => "contaminacion_agua",
                                 "descripcion_corta" => "Vertido de residuos industriales...",
                                 "ubicacion" => "Río Verde, Guayaquil",
+                                "fecha_creacion" => "2025-08-10 14:30:25",
+                                "imagen_subida" => true,
+                                "coordenadas_registradas" => true,
+                                "contacto_registrado" => true,
                                 "estado" => "pendiente",
                                 "dias_transcurridos" => 2
                             )
@@ -312,8 +378,20 @@ function mostrarDocumentacion() {
                 "metodo" => "GET"
             ),
             "filtrar_por_zona" => array(
-                "url" => API_URL . "denuncias/resumen-semanal?zona=Guayaquil",
+                "url" => API_URL . "denuncias/resumen-semanal?zona=Guayaquil&limite=20",
                 "metodo" => "GET"
+            ),
+            "crear_denuncia_completa" => array(
+                "url" => API_URL . "denuncias",
+                "metodo" => "POST",
+                "headers" => array("Content-Type: multipart/form-data"),
+                "form_data" => "descripcion, categoria, ubicacion, latitud, longitud, imagen (file), nombre_reportante, email_reportante, telefono_reportante"
+            ),
+            "crear_denuncia_json" => array(
+                "url" => API_URL . "denuncias",
+                "metodo" => "POST", 
+                "headers" => array("Content-Type: application/json"),
+                "body" => '{"descripcion": "Contaminación severa...", "categoria": "contaminacion_agua", "ubicacion": "Río X, Sector Y"}'
             ),
             "filtrar_por_categoria" => array(
                 "url" => API_URL . "denuncias/resumen-semanal?categoria=contaminacion_agua",
@@ -329,6 +407,14 @@ function mostrarDocumentacion() {
                 "url" => API_URL . "comentarios/1",
                 "metodo" => "GET"
             )
+        ),
+        "notas_importantes" => array(
+            "cors" => "API configurada con headers CORS para uso desde navegadores",
+            "upload" => "Subida de archivos limitada a 5MB, tipos permitidos: JPEG, PNG, GIF, WEBP",
+            "geolocalizacion" => "Coordenadas GPS opcionales pero si se envían deben ser ambas (lat y lng)",
+            "prioridad_automatica" => "El sistema asigna prioridad automática basada en categoría y palabras clave",
+            "folio_seguimiento" => "Cada denuncia recibe un número de folio único para seguimiento",
+            "validaciones" => "Todas las entradas son validadas antes de procesar"
         )
     );
     
@@ -389,7 +475,84 @@ function healthCheck() {
 }
 
 /**
+
+ * Setup inicial de la base de datos (solo desarrollo)
+ */
+function setupDatabase() {
+    try {
+        if (ENVIRONMENT !== 'development') {
+            sendJsonResponse(array(
+                "success" => false,
+                "message" => "Setup solo disponible en entorno de desarrollo"
+            ), 403);
+            return;
+        }
+        
+        $database = new Database();
+        $conn = $database->getConnection();
+        
+        if (!$conn) {
+            sendJsonResponse(array(
+                "success" => false,
+                "message" => "No se pudo conectar a la base de datos"
+            ), 500);
+            return;
+        }
+        
+        // Verificar tablas existentes
+        $verificacion = $database->verificarTablas();
+        
+        if (isset($verificacion['error'])) {
+            sendJsonResponse(array(
+                "success" => false,
+                "message" => "Error al verificar tablas: " . $verificacion['mensaje']
+            ), 500);
+            return;
+        }
+        
+        $setup_resultado = array();
+        
+        // Crear tablas si no existen
+        if (!$verificacion['todas_existen']) {
+            $crear_tablas = $database->crearTablasDesarrollo();
+            $setup_resultado['crear_tablas'] = $crear_tablas;
+            
+            if ($crear_tablas['success']) {
+                // Insertar datos de prueba
+                $datos_prueba = $database->insertarDatosPrueba();
+                $setup_resultado['datos_prueba'] = $datos_prueba;
+            }
+        }
+        
+        sendJsonResponse(array(
+            "success" => true,
+            "message" => "Setup de base de datos completado",
+            "data" => array(
+                "verificacion_tablas" => $verificacion,
+                "setup_resultado" => $setup_resultado,
+                "proximos_pasos" => array(
+                    "1. Verificar que las tablas se crearon correctamente",
+                    "2. Probar endpoint: GET /denuncias/resumen-semanal",
+                    "3. Probar endpoint: POST /comentarios",
+                    "4. Ver documentación: GET /docs"
+                )
+            ),
+            "message" => "Setup completado correctamente",
+        ), 200);
+        
+    } catch(Exception $e) {
+        sendJsonResponse(array(
+            "success" => false,
+            "message" => "Error en setup: " . $e->getMessage()
+        ), 500);
+    }
+}
+
+/**
+ * Página principal de bienvenida
+
  * Página principal actualizada
+
  */
 function paginaPrincipal() {
     sendJsonResponse(array(
@@ -402,6 +565,8 @@ function paginaPrincipal() {
         "version" => "2.0.0",
         "description" => "Sistema completo de denuncias ambientales ciudadanas",
         "quick_links" => array(
+            "crear_denuncia" => API_URL . "denuncias",
+            "ver_resumen" => API_URL . "denuncias/resumen-semanal",
             "documentacion" => API_URL . "docs",
             "health_check" => API_URL . "health",
             "resumen_semanal" => API_URL . "denuncias/resumen-semanal",

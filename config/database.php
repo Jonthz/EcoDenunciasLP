@@ -8,7 +8,7 @@ class Database {
     
     // Configuración para desarrollo (XAMPP)
     private $host_local = "127.0.0.1"; // Usamos explícito para evitar resoluciones distintas
-    private $port_local = 3307; // Puerto personalizado de MySQL en XAMPP
+    private $port_local = 3306; // Puerto personalizado de MySQL en XAMPP
     private $db_name_local = "ecodenuncia_db";
     private $username_local = "root";
     private $password_local = ""; // Cambiar si tu XAMPP tiene contraseña

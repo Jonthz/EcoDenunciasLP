@@ -49,7 +49,7 @@ class ResumenSemanalController {
             // Respuesta estructurada
             $response = array(
                 "success" => true,
-                "message" => "Resumen semanal obtenido exitosamente",
+                "message" => "Resumen obtenido exitosamente",
                 "data" => array(
                     "resumen" => array(
                         "total_denuncias" => (int)$estadisticas['total_denuncias'],
