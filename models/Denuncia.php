@@ -15,10 +15,6 @@ class Denuncia {
     public $ubicacion_lat;
     public $ubicacion_lng;
     public $ubicacion_direccion;
-
-    public $ubicacion_lat;
-    public $ubicacion_lng;
-
     public $imagen_url;
     public $estado;
     public $fecha_creacion;
@@ -207,17 +203,8 @@ class Denuncia {
         }
     }
     
-    /**
-     * Obtener una denuncia por ID
-     */
-    public function obtenerPorId($id) {
-        $query = "SELECT * FROM " . $this->table_name . " WHERE id = :id";
-        $stmt = $this->conn->prepare($query);
-        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
-        $stmt->execute();
-        
-        return $stmt->fetch(PDO::FETCH_ASSOC);
-    }
+  
+
     
     /**
      * Obtener denuncia completa con información adicional
@@ -555,8 +542,8 @@ class Denuncia {
             error_log("Error en obtenerEstadisticas: " . $e->getMessage());
             return false;
         }
-
-     * Validar transición de estado
+    }    
+     /** Validar transición de estado
      */
     private function validarTransicionEstado($estado_actual, $estado_nuevo) {
         // Definir transiciones válidas
