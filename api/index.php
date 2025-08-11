@@ -1,24 +1,49 @@
 <?php
-// api/index.php - Router principal para las funcionalidades de Jonathan
+// api/index.php - Router principal actualizado con todas las funcionalidades
 require_once '../config/config.php';
 require_once '../config/database.php';
 require_once '../controllers/ResumenSemanalController.php';
 require_once '../controllers/ComentariosController.php';
+require_once '../controllers/EstadoDenunciaController.php';
+require_once '../controllers/ReportesController.php';
 
 // Obtener información de la request
 $request_uri = $_SERVER['REQUEST_URI'];
 $request_method = $_SERVER['REQUEST_METHOD'];
 
+// Debug en desarrollo
+if (ENVIRONMENT === 'development') {
+    error_log("REQUEST_URI: " . $request_uri);
+    error_log("REQUEST_METHOD: " . $request_method);
+}
+
+
 // Limpiar la URI removiendo el prefijo de la API
 $api_prefix = '/EcoDenunciasLP/api'; // Ajustar según tu estructura
 $path = str_replace($api_prefix, '', parse_url($request_uri, PHP_URL_PATH));
 
+// Si no encuentra el prefijo, intentar sin él (acceso directo)
+if ($path === parse_url($request_uri, PHP_URL_PATH)) {
+    $path = ltrim(parse_url($request_uri, PHP_URL_PATH), '/');
+    // Remover 'EcoDenunciasLP/api/' si está al inicio
+    if (strpos($path, 'EcoDenunciasLP/api/') === 0) {
+        $path = substr($path, strlen('EcoDenunciasLP/api/'));
+    }
+}
+
 // Remover slash inicial si existe
 $path = ltrim($path, '/');
+
+// Debug en desarrollo
+if (ENVIRONMENT === 'development') {
+    error_log("PARSED PATH: " . $path);
+}
 
 // Instanciar controladores
 $resumenController = new ResumenSemanalController();
 $comentariosController = new ComentariosController();
+$estadoController = new EstadoDenunciaController();
+$reportesController = new ReportesController();
 
 // Función para manejar errores 404
 function notFound() {
@@ -26,9 +51,20 @@ function notFound() {
         "success" => false,
         "message" => "Endpoint no encontrado",
         "available_endpoints" => array(
+            "GET /" => "Página principal de la API",
+            "GET /health" => "Health check del sistema",
+            "GET /docs" => "Documentación de la API",
+            "GET /setup" => "Setup inicial (solo desarrollo)",
             "GET /denuncias/resumen-semanal" => "Obtener resumen semanal de denuncias",
             "POST /comentarios" => "Crear nuevo comentario",
             "GET /comentarios/{denuncia_id}" => "Obtener comentarios de una denuncia",
+            "PUT /denuncias/{id}/estado" => "Actualizar estado de denuncia",
+            "GET /denuncias/{id}" => "Obtener detalles de una denuncia",
+            "GET /denuncias/{id}/historial" => "Obtener historial de estados de una denuncia",
+            "GET /reportes" => "Generar reportes de denuncias",
+            "GET /reportes/categorias" => "Reporte por categorías",
+            "GET /reportes/ubicaciones" => "Reporte por ubicaciones",
+            "GET /reportes/exportar" => "Exportar reporte general (CSV/JSON)",
             "GET /docs" => "Documentación de la API"
         )
     ), 404);
@@ -38,20 +74,65 @@ function notFound() {
 try {
     switch(true) {
         
-        // ============= FUNCIONALIDAD 1: RESUMEN SEMANAL =============
+        // ============= FUNCIONALIDAD 1: RESUMEN SEMANAL (Jonathan) =============
         case ($path === 'denuncias/resumen-semanal' && $request_method === 'GET'):
             $resumenController->obtenerResumenSemanal();
             break;
             
-        // ============= FUNCIONALIDAD 2: SISTEMA DE COMENTARIOS =============
+        // ============= FUNCIONALIDAD 2: SISTEMA DE COMENTARIOS (Jonathan) =============
         case ($path === 'comentarios' && $request_method === 'POST'):
             $comentariosController->crearComentario();
             break;
             
-        // Obtener comentarios por denuncia ID (ruta dinámica)
+        // Obtener comentarios por denuncia ID
         case (preg_match('/^comentarios\/(\d+)$/', $path, $matches) && $request_method === 'GET'):
             $denuncia_id = $matches[1];
             $comentariosController->obtenerComentariosPorDenuncia($denuncia_id);
+            break;
+            
+        // ============= FUNCIONALIDAD 3: ACTUALIZAR ESTADO (Darwin) =============
+        // Actualizar estado de denuncia
+        case (preg_match('/^denuncias\/(\d+)\/estado$/', $path, $matches) && $request_method === 'PUT'):
+            $denuncia_id = $matches[1];
+            $estadoController->actualizarEstado($denuncia_id);
+            break;
+            
+        // Obtener detalles de una denuncia específica
+        case (preg_match('/^denuncias\/(\d+)$/', $path, $matches) && $request_method === 'GET'):
+            $denuncia_id = $matches[1];
+            $estadoController->obtenerDenuncia($denuncia_id);
+            break;
+            
+        // Obtener historial de estados
+        case (preg_match('/^denuncias\/(\d+)\/historial$/', $path, $matches) && $request_method === 'GET'):
+            $denuncia_id = $matches[1];
+            $estadoController->obtenerHistorialEstados($denuncia_id);
+            break;
+            
+        // ============= FUNCIONALIDAD 4: GENERAR REPORTES (Darwin) =============
+        // Reporte general
+        case ($path === 'reportes' && $request_method === 'GET'):
+            $reportesController->generarReporteGeneral();
+            break;
+            
+        // Reporte por categorías
+        case ($path === 'reportes/categorias' && $request_method === 'GET'):
+            $reportesController->generarReportePorCategorias();
+            break;
+            
+        // Reporte por ubicaciones
+        case ($path === 'reportes/ubicaciones' && $request_method === 'GET'):
+            $reportesController->generarReportePorUbicaciones();
+            break;
+            
+        // Reporte temporal (tendencias)
+        case ($path === 'reportes/temporal' && $request_method === 'GET'):
+            $reportesController->generarReporteTemporal();
+            break;
+            
+        // Exportar reporte (CSV/JSON)
+        case ($path === 'reportes/exportar' && $request_method === 'GET'):
+            $reportesController->exportarReporte();
             break;
             
         // ============= ENDPOINTS AUXILIARES =============
@@ -98,19 +179,23 @@ try {
 }
 
 /**
- * Documentación completa de la API
+ * Documentación completa de la API actualizada
  */
 function mostrarDocumentacion() {
     $documentation = array(
         "api_info" => array(
             "name" => "EcoDenuncia API",
-            "version" => "1.0.0",
-            "developer" => "Jonathan Paul Zambrano Arriaga",
-            "description" => "API para gestión de denuncias ambientales ciudadanas",
+            "version" => "2.0.0",
+            "developers" => array(
+                "Jonathan Paul Zambrano Arriaga",
+                "Darwin Javier Pacheco Paredes"
+            ),
+            "description" => "API completa para gestión de denuncias ambientales ciudadanas",
             "base_url" => API_URL
         ),
         "funcionalidades" => array(
             "resumen_semanal" => array(
+                "developer" => "Jonathan Zambrano",
                 "descripcion" => "Ver resumen semanal de denuncias recientes en su zona",
                 "endpoint" => "GET /denuncias/resumen-semanal",
                 "parametros" => array(
@@ -142,29 +227,74 @@ function mostrarDocumentacion() {
                 )
             ),
             "comentarios" => array(
+                "developer" => "Jonathan Zambrano",
                 "crear_comentario" => array(
                     "descripcion" => "Permitir a los usuarios dejar comentarios en denuncias existentes",
                     "endpoint" => "POST /comentarios",
                     "body_required" => array(
-                        "denuncia_id" => "ID de la denuncia (requerido)",
-                        "nombre_usuario" => "Nombre del usuario (2-100 caracteres)",
-                        "comentario" => "Texto del comentario (5-1000 caracteres)"
-                    ),
-                    "ejemplo_request" => array(
-                        "denuncia_id" => 1,
-                        "nombre_usuario" => "Jonathan Zambrano",
-                        "comentario" => "Esta denuncia requiere atención urgente por parte de las autoridades ambientales"
+                        "denuncia_id" => "ID de la denuncia",
+                        "nombre_usuario" => "Nombre del usuario",
+                        "comentario" => "Texto del comentario"
                     )
                 ),
                 "obtener_comentarios" => array(
                     "descripcion" => "Obtener todos los comentarios de una denuncia específica",
                     "endpoint" => "GET /comentarios/{denuncia_id}",
                     "parametros" => array(
-                        "denuncia_id" => "ID de la denuncia (en la URL)",
-                        "pagina" => "(opcional) Número de página (default: 1)",
-                        "limite" => "(opcional) Comentarios por página (1-50, default: 20)"
-                    ),
-                    "ejemplo_request" => API_URL . "comentarios/1?pagina=1&limite=10"
+                        "pagina" => "(opcional) Número de página",
+                        "limite" => "(opcional) Comentarios por página"
+                    )
+                )
+            ),
+            "actualizar_estado" => array(
+                "developer" => "Darwin Pacheco",
+                "descripcion" => "Actualizar estado de denuncia",
+                "actualizar" => array(
+                    "endpoint" => "PUT /denuncias/{id}/estado",
+                    "body_required" => array(
+                        "estado" => "pendiente | en_proceso | resuelta",
+                        "notas" => "(opcional) Notas sobre el cambio",
+                        "usuario_responsable" => "(opcional) Quien realiza el cambio"
+                    )
+                ),
+                "obtener_denuncia" => array(
+                    "endpoint" => "GET /denuncias/{id}",
+                    "descripcion" => "Obtener detalles completos de una denuncia"
+                ),
+                "historial" => array(
+                    "endpoint" => "GET /denuncias/{id}/historial",
+                    "descripcion" => "Ver historial de cambios de estado"
+                )
+            ),
+            "reportes" => array(
+                "developer" => "Darwin Pacheco",
+                "descripcion" => "Generar reportes estadísticos de denuncias",
+                "reporte_general" => array(
+                    "endpoint" => "GET /reportes",
+                    "parametros" => array(
+                        "fecha_inicio" => "(opcional) Fecha inicio YYYY-MM-DD",
+                        "fecha_fin" => "(opcional) Fecha fin YYYY-MM-DD",
+                        "incluir_graficos" => "(opcional) true/false"
+                    )
+                ),
+                "reporte_categorias" => array(
+                    "endpoint" => "GET /reportes/categorias",
+                    "descripcion" => "Estadísticas agrupadas por tipo de problema"
+                ),
+                "reporte_ubicaciones" => array(
+                    "endpoint" => "GET /reportes/ubicaciones",
+                    "descripcion" => "Estadísticas agrupadas por zona/ubicación"
+                ),
+                "reporte_temporal" => array(
+                    "endpoint" => "GET /reportes/temporal",
+                    "descripcion" => "Tendencias temporales y evolución"
+                ),
+                "exportar" => array(
+                    "endpoint" => "GET /reportes/exportar",
+                    "parametros" => array(
+                        "formato" => "csv | json (default: json)",
+                        "tipo" => "general | categorias | ubicaciones"
+                    )
                 )
             )
         ),
@@ -172,7 +302,7 @@ function mostrarDocumentacion() {
             "200" => "OK - Solicitud exitosa",
             "201" => "Created - Recurso creado exitosamente",
             "400" => "Bad Request - Datos inválidos o faltantes",
-            "404" => "Not Found - Endpoint no encontrado",
+            "404" => "Not Found - Recurso no encontrado",
             "405" => "Method Not Allowed - Método HTTP incorrecto",
             "500" => "Internal Server Error - Error interno del servidor"
         ),
@@ -206,7 +336,7 @@ function mostrarDocumentacion() {
 }
 
 /**
- * Health check del API
+ * Health check actualizado
  */
 function healthCheck() {
     try {
@@ -216,13 +346,20 @@ function healthCheck() {
         
         $db_status = $conn ? "connected" : "disconnected";
         
-        // Probar consulta básica
         if ($conn) {
             $stmt = $conn->query("SELECT COUNT(*) as count FROM denuncias");
             $denuncias_count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
             
             $stmt = $conn->query("SELECT COUNT(*) as count FROM comentarios");
             $comentarios_count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+            
+            // Verificar tabla de historial si existe
+            try {
+                $stmt = $conn->query("SELECT COUNT(*) as count FROM historial_estados");
+                $historial_count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+            } catch(Exception $e) {
+                $historial_count = 0;
+            }
         }
         
         sendJsonResponse(array(
@@ -232,7 +369,8 @@ function healthCheck() {
             "database" => array(
                 "status" => $db_status,
                 "denuncias_count" => isset($denuncias_count) ? (int)$denuncias_count : 0,
-                "comentarios_count" => isset($comentarios_count) ? (int)$comentarios_count : 0
+                "comentarios_count" => isset($comentarios_count) ? (int)$comentarios_count : 0,
+                "historial_count" => isset($historial_count) ? (int)$historial_count : 0
             ),
             "environment" => array(
                 "php_version" => phpversion(),
@@ -251,89 +389,25 @@ function healthCheck() {
 }
 
 /**
- * Setup inicial de la base de datos (solo desarrollo)
- */
-function setupDatabase() {
-    try {
-        if (ENVIRONMENT !== 'development') {
-            sendJsonResponse(array(
-                "success" => false,
-                "message" => "Setup solo disponible en entorno de desarrollo"
-            ), 403);
-        }
-        
-        $database = new Database();
-        $conn = $database->getConnection();
-        
-        if (!$conn) {
-            sendJsonResponse(array(
-                "success" => false,
-                "message" => "No se pudo conectar a la base de datos"
-            ), 500);
-        }
-        
-        // Verificar tablas existentes
-        $verificacion = $database->verificarTablas();
-        
-        if (isset($verificacion['error'])) {
-            sendJsonResponse(array(
-                "success" => false,
-                "message" => "Error al verificar tablas: " . $verificacion['mensaje']
-            ), 500);
-        }
-        
-        $setup_resultado = array();
-        
-        // Crear tablas si no existen
-        if (!$verificacion['todas_existen']) {
-            $crear_tablas = $database->crearTablasDesarrollo();
-            $setup_resultado['crear_tablas'] = $crear_tablas;
-            
-            if ($crear_tablas['success']) {
-                // Insertar datos de prueba
-                $datos_prueba = $database->insertarDatosPrueba();
-                $setup_resultado['datos_prueba'] = $datos_prueba;
-            }
-        }
-        
-        sendJsonResponse(array(
-            "success" => true,
-            "message" => "Setup de base de datos completado",
-            "data" => array(
-                "verificacion_tablas" => $verificacion,
-                "setup_resultado" => $setup_resultado,
-                "proximos_pasos" => array(
-                    "1. Verificar que las tablas se crearon correctamente",
-                    "2. Probar endpoint: GET /denuncias/resumen-semanal",
-                    "3. Probar endpoint: POST /comentarios",
-                    "4. Ver documentación: GET /docs"
-                )
-            )
-        ), 200);
-        
-    } catch(Exception $e) {
-        sendJsonResponse(array(
-            "success" => false,
-            "message" => "Error en setup: " . $e->getMessage()
-        ), 500);
-    }
-}
-
-/**
- * Página principal de bienvenida
+ * Página principal actualizada
  */
 function paginaPrincipal() {
     sendJsonResponse(array(
         "success" => true,
-        "message" => "Bienvenido a EcoDenuncia API",
-        "developer" => "Jonathan Paul Zambrano Arriaga",
-        "version" => "1.0.0",
-        "description" => "Sistema de denuncias ambientales ciudadanas",
+        "message" => "Bienvenido a EcoDenuncia API v2.0",
+        "developers" => array(
+            "Jonathan Paul Zambrano Arriaga" => array("Resumen Semanal", "Sistema de Comentarios"),
+            "Darwin Javier Pacheco Paredes" => array("Actualización de Estados", "Generación de Reportes")
+        ),
+        "version" => "2.0.0",
+        "description" => "Sistema completo de denuncias ambientales ciudadanas",
         "quick_links" => array(
             "documentacion" => API_URL . "docs",
             "health_check" => API_URL . "health",
             "resumen_semanal" => API_URL . "denuncias/resumen-semanal",
-            "crear_comentario" => API_URL . "comentarios"
+            "crear_comentario" => API_URL . "comentarios",
+            "actualizar_estado" => API_URL . "denuncias/{id}/estado",
+            "generar_reportes" => API_URL . "reportes"
         ),
         "timestamp" => date('Y-m-d H:i:s')
     ), 200);
