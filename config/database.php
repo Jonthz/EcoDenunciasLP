@@ -8,7 +8,7 @@ class Database {
     
     // Configuración para desarrollo (XAMPP)
     private $host_local = "127.0.0.1"; // Usamos explícito para evitar resoluciones distintas
-    private $port_local = 3306; // Puerto personalizado de MySQL en XAMPP
+    private $port_local = 3307; // Puerto personalizado de MySQL en XAMPP
     private $db_name_local = "ecodenuncia_db";
     private $username_local = "root";
     private $password_local = ""; // Cambiar si tu XAMPP tiene contraseña
@@ -46,8 +46,8 @@ class Database {
                     [ 'host' => 'localhost',        'port' => $this->port_local, 'user' => $this->username_local, 'pass' => $this->password_local ],
                     [ 'host' => $this->host_local, 'port' => $this->port_local, 'user' => $this->username_local, 'pass' => 'password' ],
                     // Fallbacks a puerto estándar por si el usuario lo cambia luego
-                    [ 'host' => $this->host_local, 'port' => 3306, 'user' => $this->username_local, 'pass' => $this->password_local ],
-                    [ 'host' => 'localhost',       'port' => 3306, 'user' => $this->username_local, 'pass' => $this->password_local ],
+                    [ 'host' => $this->host_local, 'port' => 3307, 'user' => $this->username_local, 'pass' => $this->password_local ],
+                    [ 'host' => 'localhost',       'port' => 3307, 'user' => $this->username_local, 'pass' => $this->password_local ],
                 ];
 
                 $ultimo_error = '';

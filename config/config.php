@@ -57,13 +57,14 @@ if ($is_local) {
 $allowed_origins = array(
     'http://localhost:3000',                    // React dev server
     'http://localhost:3001',                    // React alternativo
+    'http://localhost:8080',                    // React alternativo
     'https://ecodenuncia-app.netlify.app',      // Frontend en producción
     'https://ecodenuncia-frontend.vercel.app'   // Frontend alternativo
 );
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if (in_array($origin, $allowed_origins)) {
-    header("Access-Control-Allow-Origin: $origin");
+    header("Access-Control-Allow-Origin: " . $origin); // ⭐ Usar $origin específico
 } else {
     header('Access-Control-Allow-Origin: *'); // Solo para desarrollo
 }
@@ -274,8 +275,6 @@ if (ENVIRONMENT === 'production') {
 // ACTUALIZACIÓN Giovanni Sambonino - Configuración para subida de archivos de denuncias
 define('UPLOAD_MAX_SIZE', 5 * 1024 * 1024); // 5MB
 define('UPLOAD_ALLOWED_TYPES', ['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
-define('UPLOAD_DIR', '../uploads/');
-
 // ACTUALIZACIÓN Giovanni Sambonino - Crear directorios de uploads automáticamente
 if (!file_exists(UPLOAD_DIR)) {
     mkdir(UPLOAD_DIR, 0755, true);
