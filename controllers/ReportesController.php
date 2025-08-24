@@ -62,7 +62,7 @@ class ReportesController {
                         "denuncias_pendientes" => (int)$estadisticas_generales['pendientes'],
                         "denuncias_en_proceso" => (int)$estadisticas_generales['en_proceso'],
                         "denuncias_resueltas" => (int)$estadisticas_generales['resueltas'],
-                        "promedio_dias_resolucion" => round($estadisticas_generales['promedio_dias_resolucion'], 1),
+                        "promedio_dias_resolucion" => round($estadisticas_generales['promedio_dias_resolucion'] ?? 0, 1),
                         "tasa_resolucion" => round($estadisticas_generales['tasa_resolucion'], 2) . "%"
                     ),
                     "distribucion_estados" => $distribucion_estados,
