@@ -333,7 +333,7 @@ class DenunciasController {
             }
 
             $denuncia = new Denuncia();
-            $resultado = $denuncia->obtenerPorId($id);
+            $resultado = $denuncia->obtenerDenunciaCompleta($id);
 
             if ($resultado) {
                 sendJsonResponse([

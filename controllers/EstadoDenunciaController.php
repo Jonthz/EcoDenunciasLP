@@ -10,7 +10,7 @@ class EstadoDenunciaController {
      * Funcionalidad 3: Actualizar estado de denuncia
      * Responsable: Darwin Javier Pacheco Paredes
      */
-    public function actualizarEstado($denuncia_id) {
+    public function actualizarEstado($id) {
     try {
         // Validar método HTTP
         if ($_SERVER['REQUEST_METHOD'] !== 'PUT') {
@@ -21,7 +21,7 @@ class EstadoDenunciaController {
         }
 
         // Validar ID de denuncia
-        if (!is_numeric($denuncia_id) || $denuncia_id <= 0) {
+        if (!is_numeric($id) || $id <= 0) {
             sendJsonResponse(array(
                 "success" => false,
                 "message" => "ID de denuncia inválido"
@@ -63,13 +63,13 @@ class EstadoDenunciaController {
         $denuncia = new Denuncia();
 
         // Verificar que la denuncia existe y obtener estado actual
-        $denuncia_actual = $denuncia->obtenerPorId($denuncia_id);
+        $denuncia_actual = $denuncia->obtenerDenunciaCompleta($id);
 
         if (!$denuncia_actual) {
             sendJsonResponse(array(
                 "success" => false,
                 "message" => "Denuncia no encontrada",
-                "denuncia_id" => $denuncia_id
+                "denuncia_id" => $id
             ), 404);
         }
 
@@ -88,7 +88,7 @@ class EstadoDenunciaController {
 
         // Actualizar estado
         $resultado = $denuncia->actualizarEstado(
-            $denuncia_id, 
+            $id, 
             $data['estado'], 
             $notas, 
             $usuario_responsable
@@ -96,13 +96,13 @@ class EstadoDenunciaController {
 
         if ($resultado['success']) {
             // Obtener información actualizada
-            $denuncia_actualizada = $denuncia->obtenerPorId($denuncia_id);
+            $denuncia_actualizada = $denuncia->obtenerDenunciaCompleta($id);
 
             sendJsonResponse(array(
                 "success" => true,
                 "message" => "Estado actualizado exitosamente",
                 "data" => array(
-                    "denuncia_id" => (int)$denuncia_id,
+                    "denuncia_id" => (int)$id,
                     "estado_anterior" => $denuncia_actual['estado'],
                     "estado_nuevo" => $data['estado'],
                     "actualizado_por" => $usuario_responsable,
@@ -141,10 +141,10 @@ class EstadoDenunciaController {
      * ENDPOINT: GET /api/denuncias/{id}
      * Obtener detalles completos de una denuncia
      */
-    public function obtenerDenuncia($denuncia_id) {
+    public function obtenerDenuncia($id) {
         try {
             // Validar ID
-            if (!is_numeric($denuncia_id) || $denuncia_id <= 0) {
+            if (!is_numeric($id) || $id <= 0) {
                 sendJsonResponse(array(
                     "success" => false,
                     "message" => "ID de denuncia inválido"
@@ -154,18 +154,18 @@ class EstadoDenunciaController {
             $denuncia = new Denuncia();
             
             // Obtener denuncia
-            $denuncia_data = $denuncia->obtenerDenunciaCompleta($denuncia_id);
+            $denuncia_data = $denuncia->obtenerDenunciaCompleta($id);
             
             if (!$denuncia_data) {
                 sendJsonResponse(array(
                     "success" => false,
                     "message" => "Denuncia no encontrada",
-                    "denuncia_id" => $denuncia_id
+                    "denuncia_id" => $id
                 ), 404);
             }
             
             // Obtener estadísticas adicionales
-            $estadisticas = $denuncia->obtenerEstadisticasDenuncia($denuncia_id);
+            $estadisticas = $denuncia->obtenerEstadisticasDenuncia($id);
             
             // Formatear respuesta
             sendJsonResponse(array(
@@ -209,10 +209,10 @@ class EstadoDenunciaController {
      * ENDPOINT: GET /api/denuncias/{id}/historial
      * Obtener historial de cambios de estado
      */
-    public function obtenerHistorialEstados($denuncia_id) {
+    public function obtenerHistorialEstados($id) {
     try {
         // Validar ID
-        if (!is_numeric($denuncia_id) || $denuncia_id <= 0) {
+        if (!is_numeric($id) || $id <= 0) {
             sendJsonResponse(array(
                 "success" => false,
                 "message" => "ID de denuncia inválido"
@@ -222,7 +222,7 @@ class EstadoDenunciaController {
         $denuncia = new Denuncia();
 
         // Verificar que la denuncia existe
-        if (!$denuncia->obtenerPorId($denuncia_id)) {
+        if (!$denuncia->obtenerDenunciaCompleta($id)) {
             sendJsonResponse(array(
                 "success" => false,
                 "message" => "Denuncia no encontrada"
@@ -230,7 +230,7 @@ class EstadoDenunciaController {
         }
 
         // Obtener historial
-        $historial = $denuncia->obtenerHistorial($denuncia_id);
+        $historial = $denuncia->obtenerHistorial($id);
 
         // Formatear historial
         $historial_formateado = array();
@@ -250,7 +250,7 @@ class EstadoDenunciaController {
             "success" => true,
             "message" => "Historial obtenido exitosamente",
             "data" => array(
-                "denuncia_id" => (int)$denuncia_id,
+                "denuncia_id" => (int)$id,
                 "total_cambios" => count($historial_formateado),
                 "historial" => $historial_formateado
             )

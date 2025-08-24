@@ -122,11 +122,6 @@ try {
             $estadoController->actualizarEstado($denuncia_id);
             break;
             
-        // Obtener detalles de una denuncia específica
-        case (preg_match('/^denuncias\/(\d+)$/', $path, $matches) && $request_method === 'GET'):
-            $denuncia_id = $matches[1];
-            $estadoController->obtenerDenuncia($denuncia_id);
-            break;
             
         // Obtener historial de estados
         case (preg_match('/^denuncias\/(\d+)\/historial$/', $path, $matches) && $request_method === 'GET'):
