@@ -252,7 +252,9 @@ class DenunciasController {
         // Generar nombre único y seguro
         $extension = pathinfo($archivo['name'], PATHINFO_EXTENSION);
         $filename = 'denuncia_' . uniqid() . '_' . date('Y-m-d_H-i-s') . '.' . strtolower($extension);
-        $upload_path = UPLOAD_DIR . 'denuncias/';
+
+        // Ruta física en el servidor
+        $upload_path = $_SERVER['DOCUMENT_ROOT'] . '/EcoDenunciasLP/uploads/denuncias/';
         $filepath = $upload_path . $filename;
 
         // Crear directorio si no existe
@@ -263,8 +265,8 @@ class DenunciasController {
         // Mover archivo
         if (move_uploaded_file($archivo['tmp_name'], $filepath)) {
             return [
-                'success' => true, 
-                'path' => 'uploads/denuncias/' . $filename,
+                'success' => true,
+                'path' => 'uploads/denuncias/' . $filename, // Esta es la ruta relativa para la URL
                 'size' => $archivo['size'],
                 'type' => $mime_type
             ];
